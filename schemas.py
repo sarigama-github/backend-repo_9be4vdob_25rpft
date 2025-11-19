@@ -12,36 +12,72 @@ Model name is converted to lowercase for the collection name:
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
-# Example schemas (replace with your own):
+# Core domain schemas for this app
 
+class Download(BaseModel):
+    """
+    Stores metadata for a downloaded video
+    Collection name: "download"
+    """
+    url: str = Field(..., description="Source URL of the video")
+    title: Optional[str] = Field(None, description="Detected title")
+    platform: Optional[str] = Field(None, description="Platform (YouTube, TikTok, Facebook, etc.)")
+    filename: Optional[str] = Field(None, description="Stored file name on server")
+    filepath: Optional[str] = Field(None, description="Absolute path to the stored file")
+    thumbnail: Optional[str] = Field(None, description="Thumbnail URL if available")
+    duration: Optional[float] = Field(None, description="Duration in seconds")
+    ext: Optional[str] = Field(None, description="File extension")
+    status: str = Field("ready", description="Status of the download record")
+
+class StoryChapter(BaseModel):
+    title: str
+    summary: str
+
+class Story(BaseModel):
+    """
+    AI-generated story structure
+    Collection name: "story"
+    """
+    topic: str = Field(..., description="Story topic or prompt")
+    style: Optional[str] = Field("narrative", description="Writing style")
+    language: Optional[str] = Field("fr", description="Language of generated content")
+    audience: Optional[str] = Field("general", description="Target audience")
+    chapters: List[StoryChapter] = Field(default_factory=list)
+
+class CourseLesson(BaseModel):
+    title: str
+    objectives: List[str] = Field(default_factory=list)
+    content: str
+
+class Course(BaseModel):
+    """
+    AI-generated course outline
+    Collection name: "course"
+    """
+    topic: str
+    level: Optional[str] = Field("beginner", description="Difficulty level")
+    language: Optional[str] = Field("fr", description="Language")
+    target_audience: Optional[str] = Field("general", description="Target audience")
+    lessons: List[CourseLesson] = Field(default_factory=list)
+
+# Example schemas kept for reference (not used by app but safe to keep)
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    name: str
+    email: str
+    address: str
+    age: Optional[int] = None
+    is_active: bool = True
 
 class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+    title: str
+    description: Optional[str] = None
+    price: float
+    category: str
+    in_stock: bool = True
 
-# Add your own schemas here:
-# --------------------------------------------------
-
-# Note: The Flames database viewer will automatically:
+# The Flames database viewer will automatically:
 # 1. Read these schemas from GET /schema endpoint
 # 2. Use them for document validation when creating/editing
 # 3. Handle all database operations (CRUD) directly
