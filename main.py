@@ -1,11 +1,18 @@
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+# Load environment variables from .env if present
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except Exception:
+    pass
 
 # Optional database helpers
 try:
@@ -56,8 +63,21 @@ class DownloadResponse(BaseModel):
     thumbnail: Optional[str] = None
 
 
+def _build_public_file_url(request: Request, filename: str) -> str:
+    """Build an absolute URL to the file using BACKEND_PUBLIC_URL if set,
+    otherwise fall back to request.base_url.
+    """
+    backend_url = os.getenv("BACKEND_PUBLIC_URL") or ""
+    if backend_url:
+        backend_url = backend_url[:-1] if backend_url.endswith("/") else backend_url
+        return f"{backend_url}/files/{filename}"
+    # Fallback to request base URL
+    base = str(request.base_url).rstrip("/")
+    return f"{base}/files/{filename}"
+
+
 @app.post("/api/download", response_model=DownloadResponse)
-def download_media(payload: DownloadRequest):
+def download_media(payload: DownloadRequest, request: Request):
     """Download a media file from YouTube, TikTok, Facebook, etc. using yt-dlp."""
     # Lazy import to speed cold start
     try:
@@ -125,10 +145,7 @@ def download_media(payload: DownloadRequest):
     filename = file_path.name
 
     # Build absolute file URL for the client
-    backend_url = os.getenv("BACKEND_PUBLIC_URL") or ""
-    if backend_url.endswith("/"):
-        backend_url = backend_url[:-1]
-    file_url = f"{backend_url}/files/{filename}" if backend_url else f"/files/{filename}"
+    file_url = _build_public_file_url(request, filename)
 
     # Save metadata to DB if available
     try:
@@ -303,7 +320,7 @@ def generate_course(req: CourseRequest):
 
 @app.get("/test")
 def test_database():
-    response = {
+    response: Dict[str, Any] = {
         "backend": "✅ Running",
         "database": "❌ Not Available",
         "database_url": None,
@@ -327,6 +344,26 @@ def test_database():
     response["database_url"] = "✅ Set" if os.getenv("DATABASE_URL") else "❌ Not Set"
     response["database_name"] = "✅ Set" if os.getenv("DATABASE_NAME") else "❌ Not Set"
     return response
+
+
+@app.get("/schema")
+def get_schemas():
+    """Expose key Pydantic schemas so external tools can introspect collections."""
+    from schemas import Download as SDownload, Story as SStory, Course as SCourse, StoryChapter as SStoryChapter, CourseLesson as SCourseLesson
+
+    def model_schema(m):
+        try:
+            return m.model_json_schema()
+        except Exception:
+            return {}
+
+    return {
+        "download": model_schema(SDownload),
+        "story": model_schema(SStory),
+        "story_chapter": model_schema(SStoryChapter),
+        "course": model_schema(SCourse),
+        "course_lesson": model_schema(SCourseLesson),
+    }
 
 
 if __name__ == "__main__":
